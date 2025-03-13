@@ -1,0 +1,26 @@
+# Final PHP image
+FROM php:8.3-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install required packages
+RUN apk add --no-cache bash supervisor sqlite sqlite-libs sqlite-dev \
+  && docker-php-ext-install pdo_sqlite
+
+COPY ./conf/supervisord.conf /etc/supervisord.conf
+COPY ./conf/start.sh /start.sh
+COPY ./src /app
+
+# Set permissions for supervisord config
+RUN chmod 644 /etc/supervisord.conf
+
+# Install composer
+COPY --from=composer:2.2 /usr/bin/composer /usr/bin/composer
+
+# Set permissions
+RUN chmod 644 /etc/supervisord.conf && \
+  chmod +x /start.sh
+
+# Command to run the startup script
+CMD ["/start.sh"]

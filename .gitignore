@@ -1,0 +1,4 @@
+.vscode/
+/src/vendor/
+/src/.env
+/src/database/agent.sqlite

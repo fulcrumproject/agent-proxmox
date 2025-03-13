@@ -1,0 +1,15 @@
+services:
+  php-agent:
+    container_name: "php-agent"
+    build:
+      context: .
+      dockerfile: ./DockerFile
+    volumes:
+      - ./src:/app
+    restart: unless-stopped
+    networks:
+      - core-temp_fulcrum-network
+
+networks:
+  core-temp_fulcrum-network:
+    external: true
