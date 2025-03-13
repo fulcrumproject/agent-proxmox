@@ -1,4 +1,4 @@
-# Agent Smith
+# Agent Proxmox
 
 A PHP-based automation service that manages virtual machines in Proxmox environments through a job queue system.
 
