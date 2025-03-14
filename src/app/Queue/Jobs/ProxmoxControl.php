@@ -2,6 +2,7 @@
 
 namespace App\Queue\Jobs;
 
+use App\Config;
 use App\DataTransferObject\JobDTO;
 use App\Enums\JobServiceAction;
 use App\Enums\ProxmoxVmStatus;
@@ -19,6 +20,9 @@ class ProxmoxControl extends Job
     private Proxmox $proxmox;
     private JobServiceMappingsRepository $repository;
     private JobServiceMapping|null $vm;
+
+    const MAX_WAIT_TIME = 60;
+    const INITIAL_DELAY = 1;
 
     public function __construct( protected JobDTO $job ) {}
 
@@ -38,7 +42,7 @@ class ProxmoxControl extends Job
             }
 
             match ( $this->job->action ) {
-                JobServiceAction::ServiceCreate->value => $this->createVm(),
+                JobServiceAction::ServiceCreate->value => $this->cloneVm(),
                 JobServiceAction::ServiceDelete->value => $this->deleteVm(),
                 JobServiceAction::ServiceUpdate->value => $this->updateVm(),
                 JobServiceAction::ServiceStart->value => $this->updateStatus( ProxmoxVmStatus::Start ),
@@ -71,7 +75,46 @@ class ProxmoxControl extends Job
         }
 
         // Verify if the task has completed successfully
-        $this->taskVerificationWithExponentialBackoff( $taskID );
+        $this->waitForTaskCompletion( $taskID );
+
+        // Store on local DB
+        $this->vm = $this->repository->insert( $this->job->service->id, $nextId );
+    }
+
+    /**
+     * Clone a VM
+     */
+    private function cloneVm(): void
+    {
+        // Getting the next available VM ID
+        $nextId = $this->repository->getNextVmID();
+
+        // Clone VM
+        $taskID = $this->proxmox->cloneVm( Config::get( "PROXMOX_TEMPLATE_ID" ), $nextId );
+
+        if ( !$taskID ) {
+            throw new ProxmoxException( 'Failed to clone VM' );
+        }
+
+        $this->waitForTaskCompletion( $taskID );
+
+        // Update VM
+        $taskID = $this->proxmox->updateVmConfig( $nextId, [
+            'cores' => $this->job->service->properties->cpu,
+            'memory' => $this->job->service->properties->memory,
+            'scsi0' => sprintf(
+                '%s:%d',
+                Config::get( "PROXMOX_STORAGE" ),
+                Config::get( "PROXMOX_STORAGE_TEMPLATE" )
+            ),
+        ] );
+
+        if ( !$taskID ) {
+            throw new ProxmoxException( 'Failed to update VM' );
+        }
+
+        // Verify if the task has completed successfully
+        $this->waitForTaskCompletion( $taskID );
 
         // Store on local DB
         $this->vm = $this->repository->insert( $this->job->service->id, $nextId );
@@ -97,7 +140,7 @@ class ProxmoxControl extends Job
         }
 
         // Verify if the task has completed successfully
-        $this->taskVerificationWithExponentialBackoff( $taskID );
+        $this->waitForTaskCompletion( $taskID );
 
         // Remove from local DB
         $this->repository->delete( $this->vm->id );
@@ -118,7 +161,10 @@ class ProxmoxControl extends Job
         // Update VM
         $taskID = $this->proxmox->updateVmConfig(
             $this->vm->vmid,
-            $this->job->service->properties
+            [
+                "cpu" => $this->job->service->properties->cpu,
+                "memory" => $this->job->service->properties->memory,
+            ]
         );
 
         if ( !$taskID ) {
@@ -126,7 +172,7 @@ class ProxmoxControl extends Job
         }
 
         // Verify if the task has completed successfully
-        $this->taskVerificationWithExponentialBackoff( $taskID );
+        $this->waitForTaskCompletion( $taskID );
 
         if ( $previousStatus === "running" ) {
             $this->updateStatus( ProxmoxVmStatus::Start );
@@ -135,6 +181,8 @@ class ProxmoxControl extends Job
 
     /**
      * Update VM status
+     *
+     * @param ProxmoxVmStatus $status New status
      */
     private function updateStatus( ProxmoxVmStatus $status ): void
     {
@@ -145,28 +193,38 @@ class ProxmoxControl extends Job
         }
 
         // Verify if the task has completed successfully
-        $this->taskVerificationWithExponentialBackoff( $taskID );
+        $this->waitForTaskCompletion( $taskID );
     }
 
     /**
-     * Verify if a task has completed successfully
-     * Exponential backoff retry strategy. Max 3 attempts with an increased delay of one second for each interaction.
+     * Wait for task completion with exponential backoff
      *
-     * Starting from 1s (operations are not instant).
-     *
-     * @param string $task
-     * @throws ProxmoxException
+     * @param string $taskId Task ID to monitor
+     * @throws ProxmoxException If task fails or times out
      */
-    private function taskVerificationWithExponentialBackoff( string $task ): void
+    private function waitForTaskCompletion( string $taskId ): void
     {
-        for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
-            usleep( 1000 * 500 * $attempt ); // Sleep 1s, 2s, 3s
+        $startTime = time();
+        $attempt = 1;
 
-            if ( $this->proxmox->checkTaskHasCompleted( $task ) ) {
+        while ( time() - $startTime < self::MAX_WAIT_TIME ) {
+            if ( $this->proxmox->checkTaskHasCompleted( $taskId ) ) {
                 return;
             }
+
+            // Calculate next delay with exponential backoff
+            $currentDelay = min( self::INITIAL_DELAY * pow( 2, $attempt ), 8 ); // Max 8 seconds between checks
+
+            if ( time() + $currentDelay - $startTime >= self::MAX_WAIT_TIME ) {
+                break; // Would exceed max wait time
+            }
+
+            sleep( $currentDelay );
+            $attempt++;
         }
 
-        throw new ProxmoxException( 'Exponential backoff retry limit exceeded—condition verification failed.' );
+        throw new ProxmoxException(
+            sprintf( "Task %s timed out (%d attempts)", $taskId, $attempt )
+        );
     }
 }

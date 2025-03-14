@@ -113,12 +113,9 @@ class Proxmox
         return $res["data"];
     }
 
-    public function updateVmConfig( int $id, PropertiesDTO $properties ): ?string
+    public function updateVmConfig( int $id, array $data ): ?string
     {
-        $res = $this->request( 'POST', "/api2/json/nodes/{$this->node}/qemu/$id/config", [
-            'cores' => $properties->cpu,
-            'memory' => $properties->memory,
-        ] );
+        $res = $this->request( 'POST', "/api2/json/nodes/{$this->node}/qemu/$id/config", $data );
 
         // Return the task ID
         return $res["data"];
@@ -157,6 +154,24 @@ class Proxmox
     }
 
     /**
+     * Create a full clone of a VM
+     *
+     * @param int $sourceId The ID of the source VM
+     * @param int $targetId The ID of the new VM
+     * @return string|null Task ID
+     */
+    public function cloneVm( int $sourceId, int $targetId ): ?string
+    {
+        $res = $this->request( 'POST', "/api2/json/nodes/{$this->node}/qemu/{$sourceId}/clone", [
+            'newid' => $targetId,
+            'full' => 1,
+            'storage' => Config::get( 'PROXMOX_STORAGE' ),
+        ] );
+
+        return $res["data"];
+    }
+
+    /**
      * Get task status.
      * Usefull to check if a specific operation (create, delete, start, stop) has completed.
      *
@@ -167,6 +182,16 @@ class Proxmox
     {
         $res = $this->request( 'GET', "/api2/json/nodes/{$this->node}/tasks/{$taskId}/status" );
 
-        return $res["data"]["status"] === "stopped" && $res["data"]["exitstatus"] === 'OK' ? true : false;
+        if ( $res["data"]["status"] !== "stopped" ) {
+            return false;
+        }
+
+        if ( $res["data"]["exitstatus"] !== 'OK' ) {
+            throw new ProxmoxException(
+                'Task failed: ' . $taskId
+            );
+        }
+
+        return true;
     }
 }
