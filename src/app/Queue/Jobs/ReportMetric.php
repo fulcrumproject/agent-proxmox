@@ -3,6 +3,7 @@
 namespace App\Queue\Jobs;
 
 use App\Enums\QueuePriority;
+use App\Logger;
 use App\Queue\Jobs\Contracts\Autoschedule;
 use App\Queue\Jobs\Contracts\Job;
 use App\Repositories\JobServiceMappingsRepository;
@@ -23,7 +24,7 @@ class ReportMetric extends Job implements Autoschedule
             $results = $proxmox->getMetrics();
 
             foreach ( $results as $res ) {
-                $map = $jobServiceMappingsRepository->findByVmID( $res->externalId );
+                $map = $jobServiceMappingsRepository->findByVmID( $res->vmid );
 
                 if ( $map === null ) {
                     continue;
@@ -33,6 +34,8 @@ class ReportMetric extends Job implements Autoschedule
                 $fulcrum->addMetric( $map->id, "vm.cpu.usage", $res->cpu );
             }
         } catch ( ProxmoxException | Throwable $e ) {
+            Logger::log( "Failed to report metrics: " . $e->getMessage() );
+
             return;
         }
     }

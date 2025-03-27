@@ -5,7 +5,7 @@ namespace App\DataTransferObject;
 class ProxmoxMetricsDTO
 {
     public function __construct(
-        public readonly string $externalId,
+        public readonly string $vmid,
         public readonly float  $memory,
         public readonly float  $cpu,
     ) {}
@@ -13,7 +13,7 @@ class ProxmoxMetricsDTO
     public static function fromArray( array $data ): self
     {
         return new self(
-            externalId: $data['vmid'],
+            vmid: $data['vmid'],
             memory: $data["mem"] * 100 / $data["maxmem"],
             cpu: $data['cpu']
         );
