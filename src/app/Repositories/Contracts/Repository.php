@@ -2,8 +2,6 @@
 
 namespace App\Repositories\Contracts;
 
-use App\Database;
-use Exception;
 use PDO;
 
 abstract class Repository
@@ -11,30 +9,34 @@ abstract class Repository
     protected PDO $pdo;
     protected string $tableName;
 
-    /** @var static|null Singleton instance */
-    private static ?Repository $instance = null;
-
-    private function __construct()
+    /**
+     * Check if a record exists using the primary key
+     *
+     * @param int $ID primary key
+     * @param string $column column name
+     * @return bool
+     */
+    public function exists( int $ID, string $column = "id" ): bool
     {
-        $this->pdo = Database::getInstance()->getPdo();
+        $stmt = $this->pdo->prepare( "
+            SELECT EXISTS ( SELECT 1 FROM {$this->tableName} WHERE {$column} = :id )
+        " );
 
-        if ( !$this->tableName ) {
-            throw new Exception( "Table name must be defined in the child repository." );
-        }
+        $stmt->execute( ['id' => $ID] );
+
+        return (bool) $stmt->fetchColumn();
     }
 
     /**
-     * Get the singleton instance of the Repository
+     * Check if a record does not exist using the primary key
      *
-     * @return static
+     * @param int $ID primary key
+     * @param string $column column name
+     * @return bool
      */
-    public static function getInstance(): static
+    public function doesntExist( int $ID, string $column = "id" ): bool
     {
-        if ( self::$instance === null ) {
-            self::$instance = new static();
-        }
-
-        return self::$instance;
+        return !$this->exists( $ID, $column );
     }
 
     /**

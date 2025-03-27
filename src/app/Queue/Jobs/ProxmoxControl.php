@@ -21,9 +21,6 @@ class ProxmoxControl extends Job
     private JobServiceMappingsRepository $repository;
     private JobServiceMapping|null $vm;
 
-    const MAX_WAIT_TIME = 60;
-    const INITIAL_DELAY = 1;
-
     public function __construct( protected JobDTO $job ) {}
 
     public function execute(): void
@@ -56,7 +53,7 @@ class ProxmoxControl extends Job
         }
 
         // Mark job as completed
-        $this->fulcrum->completeJob( $this->job->id, $this->vm->vmid );
+        $this->fulcrum->completeJob( $this->job->id, (string) $this->vm->vmid );
     }
 
     /**
@@ -98,16 +95,23 @@ class ProxmoxControl extends Job
 
         $this->waitForTaskCompletion( $taskID );
 
-        // Update VM
-        $taskID = $this->proxmox->updateVmConfig( $nextId, [
+        // Update VM resources
+        $configParams = [
             'cores' => $this->job->service->properties->cpu,
             'memory' => $this->job->service->properties->memory,
-            'scsi0' => sprintf(
+        ];
+
+        // Add storage resize if specified
+        if ( $this->job->service->properties->storage ) {
+            $configParams['scsi0'] = sprintf(
                 '%s:%d',
                 Config::get( "PROXMOX_STORAGE" ),
-                Config::get( "PROXMOX_STORAGE_TEMPLATE" )
-            ),
-        ] );
+                $this->job->service->properties->storage
+            );
+        }
+
+        // Update VM
+        $taskID = $this->proxmox->updateVmConfig( $nextId, $configParams );
 
         if ( !$taskID ) {
             throw new ProxmoxException( 'Failed to update VM' );
@@ -162,7 +166,7 @@ class ProxmoxControl extends Job
         $taskID = $this->proxmox->updateVmConfig(
             $this->vm->vmid,
             [
-                "cpu" => $this->job->service->properties->cpu,
+                "cores" => $this->job->service->properties->cpu,
                 "memory" => $this->job->service->properties->memory,
             ]
         );
@@ -181,8 +185,6 @@ class ProxmoxControl extends Job
 
     /**
      * Update VM status
-     *
-     * @param ProxmoxVmStatus $status New status
      */
     private function updateStatus( ProxmoxVmStatus $status ): void
     {
@@ -204,18 +206,20 @@ class ProxmoxControl extends Job
      */
     private function waitForTaskCompletion( string $taskId ): void
     {
+        $maxWaitTime = 60;
+        $initialDelay = 1;
         $startTime = time();
         $attempt = 1;
 
-        while ( time() - $startTime < self::MAX_WAIT_TIME ) {
+        while ( time() - $startTime < $maxWaitTime ) {
             if ( $this->proxmox->checkTaskHasCompleted( $taskId ) ) {
                 return;
             }
 
             // Calculate next delay with exponential backoff
-            $currentDelay = min( self::INITIAL_DELAY * pow( 2, $attempt ), 8 ); // Max 8 seconds between checks
+            $currentDelay = min( $initialDelay * pow( 2, $attempt ), 8 ); // Max 8 seconds between checks
 
-            if ( time() + $currentDelay - $startTime >= self::MAX_WAIT_TIME ) {
+            if ( time() + $currentDelay - $startTime >= $maxWaitTime ) {
                 break; // Would exceed max wait time
             }
 

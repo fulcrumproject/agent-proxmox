@@ -21,8 +21,8 @@ trait AddMetric
         try {
             // Send a POST request to add the metric
             $this->sendRequest( 'POST', '/api/v1/metric-entries', [
-                'externalId' => $externalId,
-                'resourceId' => time(),
+                'externalId' => (string) $externalId,
+                'resourceId' => (string) time(),
                 'typeName' => $typename,
                 'value' => $value,
             ] );

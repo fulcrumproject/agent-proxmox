@@ -11,16 +11,16 @@ trait CompleteJob
      * Completes a job in Fulcrum Core for this agent
      *
      * @param string $jobId The ID of the job to complete
-     * @param int $externalId Our ID that Fulcrum Core stores related for the given service. We can later send metrics using externalId
+     * @param string $externalId Our ID that Fulcrum Core stores related for the given service. We can later send metrics using externalId
      * @return bool True if the job was successfully completed
      * @throws Exception If the request fails
      */
-    public function completeJob( string $jobId, int $externalId ): bool
+    public function completeJob( string $jobId, string $externalId ): bool
     {
         try {
             // Send a POST request to complete the job
-            $this->sendRequest( 'POST', '/api/v1/jobs/' . $jobId . '/complete', [
-                'externalId' => $externalId,
+            $res = $this->sendRequest( 'POST', '/api/v1/jobs/' . $jobId . '/complete', [
+                'externalId' => (string) $externalId,
             ] );
 
             return true;

@@ -5,6 +5,7 @@ namespace App\Queue\Jobs;
 use App\Enums\QueuePriority;
 use App\Queue\Jobs\Contracts\Autoschedule;
 use App\Queue\Jobs\Contracts\Job;
+use App\Repositories\JobServiceMappingsRepository;
 use App\Services\FulcrumCore\FulcrumCore;
 use App\Services\Proxmox\Exceptions\ProxmoxException;
 use App\Services\Proxmox\Proxmox;
@@ -16,11 +17,16 @@ class ReportMetric extends Job implements Autoschedule
     {
         $proxmox = Proxmox::getInstance();
         $fulcrum = FulcrumCore::getInstance();
+        $jobServiceMappingsRepository = JobServiceMappingsRepository::getInstance();
 
         try {
             $results = $proxmox->getMetrics();
 
             foreach ( $results as $res ) {
+                if ( $jobServiceMappingsRepository->doesntExist( $res->externalId, "vmid" ) ) {
+                    continue;
+                }
+
                 $fulcrum->addMetric( $res->externalId, "vm.memory.usage", $res->memory );
                 $fulcrum->addMetric( $res->externalId, "vm.cpu.usage", $res->cpu );
             }

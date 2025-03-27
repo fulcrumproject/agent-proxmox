@@ -2,12 +2,40 @@
 
 namespace App\Repositories;
 
+use App\Database;
 use App\Models\JobServiceMapping;
 use App\Repositories\Contracts\Repository;
+use Exception;
 
 class JobServiceMappingsRepository extends Repository
 {
     protected string $tableName = "job_service_mappings";
+
+    /** @var static|null Singleton instance */
+    private static ?Repository $instance = null;
+
+    private function __construct()
+    {
+        $this->pdo = Database::getInstance()->getPdo();
+
+        if ( !$this->tableName ) {
+            throw new Exception( "Table name must be defined in the child repository." );
+        }
+    }
+
+    /**
+     * Get the singleton instance of the Repository
+     *
+     * @return static
+     */
+    public static function getInstance(): static
+    {
+        if ( self::$instance === null ) {
+            self::$instance = new static();
+        }
+
+        return self::$instance;
+    }
 
     /**
      * Insert a new job service mapping
