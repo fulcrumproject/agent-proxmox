@@ -53,7 +53,7 @@ class ProxmoxControl extends Job
         }
 
         // Mark job as completed
-        $this->fulcrum->completeJob( $this->job->id, (string) $this->vm->vmid );
+        $this->fulcrum->completeJob( $this->job->id, $this->vm->id );
     }
 
     /**

@@ -23,12 +23,14 @@ class ReportMetric extends Job implements Autoschedule
             $results = $proxmox->getMetrics();
 
             foreach ( $results as $res ) {
-                if ( $jobServiceMappingsRepository->doesntExist( $res->externalId, "vmid" ) ) {
+                $map = $jobServiceMappingsRepository->findByVmID( $res->externalId );
+
+                if ( $map === null ) {
                     continue;
                 }
 
-                $fulcrum->addMetric( $res->externalId, "vm.memory.usage", $res->memory );
-                $fulcrum->addMetric( $res->externalId, "vm.cpu.usage", $res->cpu );
+                $fulcrum->addMetric( $map->id, "vm.memory.usage", $res->memory );
+                $fulcrum->addMetric( $map->id, "vm.cpu.usage", $res->cpu );
             }
         } catch ( ProxmoxException | Throwable $e ) {
             return;
