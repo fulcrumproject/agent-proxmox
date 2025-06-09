@@ -18,7 +18,7 @@ trait UpdateAgentStatus
     {
         try {
             // Send the PUT request with the status data
-            $this->sendRequest( 'PUT', '/api/v1/agents/me/status', ['state' => $status] );
+            $this->sendRequest( 'PUT', '/api/v1/agents/me/status', ['status' => $status] );
 
             return true;
         } catch ( RequestException $e ) {

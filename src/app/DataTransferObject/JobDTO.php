@@ -6,7 +6,7 @@ class JobDTO
 {
     public string $id;
     public string $action;
-    public string $state;
+    public string $status;
     public ServiceDTO $service;
 
     /**
@@ -18,7 +18,7 @@ class JobDTO
     {
         $this->id = $data['id'];
         $this->action = $data['action'];
-        $this->state = $data['state'];
+        $this->status = $data['status'];
 
         $this->service = ServiceDTO::fromArray( $data["service"] );
     }

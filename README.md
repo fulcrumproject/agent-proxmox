@@ -18,7 +18,7 @@ Agent Smith acts as a bridge between FulcrumCore and Proxmox VE (Virtual Environ
 
    - Central orchestration service
    - Initiates VM management requests
-   - Tracks service states and requirements
+   - Tracks service statuses and requirements
    - Communicates with Agent Smith via API
 
 2. **Agent Smith**
@@ -94,7 +94,7 @@ The queue maintains several critical jobs that ensure system health:
 - `PruneCompletedJobs`: Cleans up finished jobs
 - `ReportMetric`: Sends system metrics
 
-### Job States
+### Job Status
 
 - `pending`: Awaiting processing
 - `processing`: Under execution
@@ -106,7 +106,7 @@ The queue maintains several critical jobs that ensure system health:
 - `create`: Provisions new VMs with specified resources
 - `delete`: Removes existing VMs
 - `update`: Modifies VM configurations
-- `start/stop`: Controls VM power state
+- `start/stop`: Controls VM power status
 
 ## Database Schema
 
